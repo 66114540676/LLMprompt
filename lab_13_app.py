@@ -273,26 +273,32 @@ with st.sidebar:
 
     st.markdown('<div class="side-label">แชท</div>', unsafe_allow_html=True)
 
-    for s_id, s_data in reversed(list(st.session_state.sessions.items())):
-        title = s_data.get("title") or "Chat"  # ชื่อยาวถูกตัดด้วย CSS (ellipsis)
-        is_active = s_id == current_id
+    # รายการแชทอยู่ใน container ของตัวเอง ส่วนตั้งค่าจึงอยู่ตำแหน่งเดิมเสมอไม่ว่าจะมีกี่แชท
+    # (ถ้าตำแหน่งเลื่อน Streamlit จะโชว์ส่วนตั้งค่าชุดเก่าค้างซ้อนกับชุดใหม่ เช่น หลังล้างแชททั้งหมด)
+    chat_list = st.container()
+    settings = st.container(key="settings")
 
-        col_title, col_del = st.columns([5, 1], gap="small")
-        with col_title:
-            if st.button(title, key=f"chat_{s_id}", type="primary" if is_active else "secondary"):
-                st.session_state.current_session_id = s_id
-                st.rerun()
-        with col_del:
-            if st.button("✕", key=f"del_{s_id}", help="ลบแชทนี้"):
-                del st.session_state.sessions[s_id]
-                if not st.session_state.sessions:
-                    new_session()
-                elif is_active:
-                    st.session_state.current_session_id = list(st.session_state.sessions.keys())[-1]
-                save_all_sessions(st.session_state.sessions)
-                st.rerun()
+    with chat_list:
+        for s_id, s_data in reversed(list(st.session_state.sessions.items())):
+            title = s_data.get("title") or "Chat"  # ชื่อยาวถูกตัดด้วย CSS (ellipsis)
+            is_active = s_id == current_id
 
-    with st.container(key="settings"):
+            col_title, col_del = st.columns([5, 1], gap="small")
+            with col_title:
+                if st.button(title, key=f"chat_{s_id}", type="primary" if is_active else "secondary"):
+                    st.session_state.current_session_id = s_id
+                    st.rerun()
+            with col_del:
+                if st.button("✕", key=f"del_{s_id}", help="ลบแชทนี้"):
+                    del st.session_state.sessions[s_id]
+                    if not st.session_state.sessions:
+                        new_session()
+                    elif is_active:
+                        st.session_state.current_session_id = list(st.session_state.sessions.keys())[-1]
+                    save_all_sessions(st.session_state.sessions)
+                    st.rerun()
+
+    with settings:
         st.markdown('<div class="side-label">ตั้งค่า</div>', unsafe_allow_html=True)
         st.radio(
             "โหมดค้นหา",
@@ -309,19 +315,21 @@ with st.sidebar:
         )
         st.caption(f"โมเดล: `{LLM_MODEL}`  \nEmbedding: `{EMBED_MODEL}`  \nอ่านรูป: `{VISION_MODEL}`")
 
+        clear_slot = st.empty()  # สลับระหว่างปุ่มล้าง กับปุ่มยืนยัน ในช่องเดียวกัน
         if st.session_state.get("confirm_clear"):
-            st.caption("ลบแชททั้งหมดถาวร ยืนยันไหม")
-            col_yes, col_no = st.columns(2, gap="small")
-            if col_yes.button("ลบทั้งหมด", key="clear_yes", type="primary"):
-                st.session_state.sessions = {}
-                new_session()
-                save_all_sessions(st.session_state.sessions)
-                st.session_state.confirm_clear = False
-                st.rerun()
-            if col_no.button("ยกเลิก", key="clear_no"):
-                st.session_state.confirm_clear = False
-                st.rerun()
-        elif st.button("ล้างแชททั้งหมด", key="clear_all"):
+            with clear_slot.container():
+                st.caption("ลบแชททั้งหมดถาวร ยืนยันไหม")
+                col_yes, col_no = st.columns(2, gap="small")
+                if col_yes.button("ลบทั้งหมด", key="clear_yes", type="primary"):
+                    st.session_state.sessions = {}
+                    new_session()
+                    save_all_sessions(st.session_state.sessions)
+                    st.session_state.confirm_clear = False
+                    st.rerun()
+                if col_no.button("ยกเลิก", key="clear_no"):
+                    st.session_state.confirm_clear = False
+                    st.rerun()
+        elif clear_slot.button("ล้างแชททั้งหมด", key="clear_all"):
             st.session_state.confirm_clear = True
             st.rerun()
 

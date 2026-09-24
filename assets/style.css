@@ -74,6 +74,14 @@
     width: 100% !important; max-width: 100%;
 }
 
+/* ข้อความในปุ่มชิดซ้าย (Streamlit จัดข้อความในปุ่มไว้กลางเป็นค่าเริ่มต้น) ยกเว้นปุ่มแชทใหม่ */
+[class*="st-key-chat_"] button > *, [class*="st-key-sug_"] button > * {
+    flex: 1 1 auto; width: 100%;
+}
+[class*="st-key-chat_"] button *, [class*="st-key-sug_"] button * {
+    justify-content: flex-start !important; text-align: left !important;
+}
+
 /* ปุ่มแชทใหม่: เต็มความกว้าง */
 .st-key-new_chat button {
     justify-content: center !important;
