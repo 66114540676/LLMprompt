@@ -3,9 +3,11 @@ import io
 import itertools
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import streamlit as st
 
@@ -13,7 +15,12 @@ from lab_12_hybrid_rag import EMBED_MODEL, HybridRAG, load_chunks
 from lab_13_coding_assistant import LLM_MODEL, stream_response
 
 DATASET_DIR = "dataset"  # โฟลเดอร์ข้อมูลโค้ดที่ใช้เป็นฐานความรู้ของ RAG
-RETRIEVAL_MODES = ["Vector", "BM25", "Hybrid"]
+RETRIEVAL_MODES = ["Hybrid", "Vector", "BM25"]
+RETRIEVAL_CAPTIONS = {
+    "Hybrid": "รวมสองวิธีด้วย RRF (แนะนำ)",
+    "Vector": "ค้นตามความหมาย",
+    "BM25": "ค้นตามคำที่ตรงกัน",
+}
 SAMPLE_DOCS = [  # ใช้ก็ต่อเมื่อไม่พบไฟล์ในโฟลเดอร์ dataset
     "def add(a, b):\n    return a + b",
     "def multiply(a, b):\n    return a * b",
@@ -30,10 +37,10 @@ DOC_TYPES = ["py", "txt", "md", "json", "csv", "js", "ts", "html", "css", "java"
 IMAGE_TYPES = ["png", "jpg", "jpeg", "webp"]
 
 SUGGESTIONS = [
-    "เขียนฟังก์ชันบวกเลขสองตัว พร้อมอธิบาย",
-    "อธิบาย class Calculator ทีละบรรทัด",
-    "เขียน unit test ให้ฟังก์ชัน multiply",
-    "เขียน decorator สำหรับ retry เมื่อเกิด error",
+    "เขียน binary search พร้อมอธิบาย",
+    "ทำ decorator ที่ลองใหม่เมื่อเกิด error",
+    "ยกตัวอย่าง Observer pattern",
+    "สร้างคลาสบัญชีธนาคารที่ถอนเกินยอดไม่ได้",
 ]
 
 st.set_page_config(page_title="Coding Assistant", page_icon="✨", layout="wide")
@@ -41,129 +48,8 @@ st.set_page_config(page_title="Coding Assistant", page_icon="✨", layout="wide"
 # ---------------------------------------------------------------------------
 # Styling
 # ---------------------------------------------------------------------------
-CUSTOM_CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-
-:root {
-    --bg: #0F131A;
-    --side: #0B0E14;
-    --surface: #171C25;
-    --line: #262E3B;
-    --text: #E2E8F0;
-    --muted: #8390A3;
-    --accent: #7F95FF;
-    --accent-soft: rgba(127, 149, 255, .14);
-    --accent-line: rgba(127, 149, 255, .28);
-}
-
-/* ---------- Base ---------- */
-.stApp, .stApp p, .stApp li, .stApp label, .stApp button, .stApp textarea,
-.stApp input, .stApp h1, .stApp h2, .stApp h3,
-.stApp [data-testid="stMarkdownContainer"] {
-    font-family: 'IBM Plex Sans Thai', system-ui, sans-serif;
-}
-.stApp code, .stApp pre, .stApp pre * {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-.stApp { background: var(--bg); color: var(--text); }
-[data-testid="stHeader"] { background: transparent; }
-[data-testid="stAppDeployButton"], #MainMenu, footer { display: none !important; }
-.block-container { max-width: 820px; padding-top: 2.5rem; padding-bottom: 8rem; }
-
-/* ---------- Sidebar ---------- */
-[data-testid="stSidebar"] { background: var(--side); border-right: 1px solid var(--line); }
-.brand {
-    display: flex; align-items: center; gap: .55rem;
-    font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em;
-    padding: .25rem 0 1rem;
-}
-.brand span { color: var(--accent); font-size: 1.3rem; }
-.side-label { color: var(--muted); font-size: .8rem; padding: 1.1rem .2rem .35rem; }
-
-[data-testid="stSidebar"] .stButton button {
-    width: 100%; justify-content: flex-start; text-align: left;
-    background: transparent; color: var(--muted);
-    border: 1px solid transparent; border-radius: 10px;
-    padding: .45rem .7rem; min-height: 0; font-weight: 400;
-    transition: background .15s, color .15s;
-}
-[data-testid="stSidebar"] .stButton button:hover {
-    background: var(--surface); color: var(--text); border-color: transparent;
-}
-[data-testid="stSidebar"] .stButton button[kind="primary"],
-[data-testid="stSidebar"] .stButton button[data-testid="stBaseButton-primary"] {
-    background: var(--accent-soft); color: var(--text); border-color: var(--accent-line);
-}
-.st-key-new_chat button {
-    justify-content: center !important;
-    background: var(--surface) !important; color: var(--text) !important;
-    border: 1px solid var(--line) !important; font-weight: 500 !important;
-}
-.st-key-new_chat button:hover { border-color: var(--accent) !important; }
-[class*="st-key-del_"] button { justify-content: center !important; padding-left: 0 !important; padding-right: 0 !important; }
-[class*="st-key-del_"] button:hover { color: #FF7A85 !important; }
-
-[data-testid="stSidebar"] [data-testid="stExpander"] { border: 1px solid var(--line); border-radius: 12px; background: transparent; }
-
-/* ---------- Empty state ---------- */
-.hero { text-align: center; padding: 13vh 0 2rem; }
-.hero-title { font-size: 2.1rem; font-weight: 600; letter-spacing: -.02em; margin-bottom: .5rem; }
-.hero-sub { color: var(--muted); }
-
-[data-testid="stMain"] .stButton button, section.main .stButton button {
-    width: 100%; height: 100%; justify-content: flex-start; text-align: left;
-    background: var(--surface); color: var(--text);
-    border: 1px solid var(--line); border-radius: 14px;
-    padding: .9rem 1rem; font-weight: 400; line-height: 1.5;
-    transition: border-color .15s, background .15s;
-}
-[data-testid="stMain"] .stButton button:hover, section.main .stButton button:hover {
-    border-color: var(--accent); background: var(--accent-soft); color: var(--text);
-}
-
-/* ---------- Messages ---------- */
-[data-testid="stChatMessage"] {
-    background: transparent; padding: .45rem 0; gap: .8rem; align-items: flex-start;
-}
-[data-testid="stChatMessageContent"] { line-height: 1.75; }
-
-[data-testid="stChatMessageAvatarAssistant"] {
-    background: var(--accent); color: #0B1020; border-radius: 10px;
-}
-[data-testid="stChatMessageAvatarUser"] { display: none; }
-
-/* ข้อความของผู้ใช้: ชิดขวาเป็นบับเบิล */
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    flex-direction: row-reverse;
-}
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
-    flex: 0 1 auto; width: fit-content; max-width: 80%;
-    background: var(--accent-soft); border: 1px solid var(--accent-line);
-    border-radius: 18px 18px 4px 18px; padding: .65rem 1rem;
-}
-
-/* ---------- Code / sources ---------- */
-[data-testid="stCode"], [data-testid="stCodeBlock"] { border: 1px solid var(--line); border-radius: 12px; }
-[data-testid="stMain"] [data-testid="stExpander"], section.main [data-testid="stExpander"] {
-    border: 1px solid var(--line); border-radius: 12px; background: transparent;
-}
-
-/* ---------- Input ---------- */
-[data-testid="stBottom"] > div { background: var(--bg); }
-[data-testid="stChatInput"] {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
-}
-[data-testid="stChatInput"] > div { background: transparent; border: none; }
-[data-testid="stChatInput"]:focus-within {
-    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
-}
-[data-testid="stChatInput"] textarea { color: var(--text); }
-
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-</style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+STYLE_FILE = Path(__file__).parent / "assets" / "style.css"
+st.markdown(f"<style>{STYLE_FILE.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -191,10 +77,69 @@ def new_session():
     st.session_state.current_session_id = sid
 
 
-def render_sources(sources):
-    if sources:
-        with st.expander("Sources"):
-            st.code(sources, language="python")
+CODE_LANGUAGES = {
+    ".py": "python", ".js": "javascript", ".ts": "typescript", ".java": "java",
+    ".c": "c", ".cpp": "cpp", ".sql": "sql", ".md": "markdown", ".json": "json",
+    ".html": "html", ".css": "css",
+}
+
+
+def describe_snippet(snippet):
+    """แยกชื่อแท็บ, ชนิด, ภาษา และตัวโค้ด ออกจาก chunk
+
+    chunk จาก dataset ขึ้นต้นด้วย "# <path>" หรือ "# <path> (class X)" ส่วนไฟล์แนบขึ้นต้นด้วย
+    "# File: <name>" หรือ "# Image: <name>" (ตัวอย่างใน SAMPLE_DOCS ไม่มีบรรทัดหัว)
+    """
+    header, _, body = snippet.partition("\n")
+    attached = re.match(r"# (File|Image): (.+)", header)
+    if attached:
+        kind, name = attached.groups()
+        lang = "text" if kind == "Image" else CODE_LANGUAGES.get(Path(name).suffix.lower(), "text")
+        return {"label": name, "kind": kind.lower(), "lang": lang, "code": body}
+
+    path, owner = None, None
+    source_header = re.match(r"# (\S+)(?: \(class (\w+)\))?$", header)
+    if source_header:
+        path, owner = source_header.groups()
+    else:
+        body = snippet
+
+    symbol = re.search(r"^\s*(?:async\s+)?(?:def|class)\s+(\w+)", body, re.MULTILINE)
+    name = symbol.group(1) if symbol else None
+    if owner and name:
+        name = f"{owner}.{name}"
+
+    file_name = Path(path).name if path else None
+    label = " › ".join(part for part in (file_name, name) if part) or "snippet"
+    lang = CODE_LANGUAGES.get(Path(path).suffix.lower(), "text") if path else "python"
+    return {"label": label, "kind": "dataset", "lang": lang, "code": body}
+
+
+def render_sources(snippets, mode=None):
+    """แสดงโค้ดอ้างอิงเป็นแท็บแบบ code editor (หนึ่งแท็บต่อหนึ่ง snippet)"""
+    if not snippets:
+        return
+    items = [describe_snippet(s) for s in snippets]
+    with st.expander(f"ดูโค้ดอ้างอิง ({len(items)})", expanded=False):
+        tabs = st.tabs([item["label"] for item in items])
+        rank = 0
+        for tab, item in zip(tabs, items):
+            with tab:
+                st.code(item["code"], language=item["lang"])
+                if item["kind"] == "file":
+                    st.caption("ไฟล์ที่แนบมากับคำถาม")
+                elif item["kind"] == "image":
+                    st.caption(f"คำบรรยายรูปที่แนบ โดย {VISION_MODEL}")
+                else:
+                    rank += 1
+                    st.caption(f"ค้นเจอด้วยโหมด {mode} · อันดับ {rank}" if mode else f"อันดับ {rank}")
+
+
+def message_snippets(msg):
+    """คืนรายการ snippet ของข้อความ (แชทเก่ามีแค่ "sources" ที่เป็นข้อความต่อกันด้วย ---)"""
+    if "snippets" in msg:
+        return msg["snippets"]
+    return msg["sources"].split("\n---\n") if msg.get("sources") else []
 
 
 def is_image(name):
@@ -272,13 +217,23 @@ def render_message(msg):
         if msg.get("files"):
             st.caption("📎 " + ", ".join(msg["files"]))
         st.markdown(msg["content"])
-        render_sources(msg.get("sources"))
+        render_sources(message_snippets(msg), msg.get("mode"))
 
 
 @st.cache_resource(show_spinner="กำลังสร้างดัชนีเอกสาร...")
 def get_rag():
     """สร้าง RAG ครั้งเดียวแล้วใช้ร่วมกันทุกแชท (ไม่ต้อง embed ใหม่ทุกครั้งที่เปิดหน้า)"""
     return HybridRAG(load_chunks(DATASET_DIR) or SAMPLE_DOCS)
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def ollama_online():
+    """เช็กว่า Ollama เปิดอยู่ไหม (แสดงสถานะใน sidebar เท่านั้น ไม่ได้เรียกโมเดล)"""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=1):
+            return True
+    except OSError:
+        return False
 
 
 def set_pending_prompt(text):
@@ -309,17 +264,17 @@ current_id = st.session_state.current_session_id
 with st.sidebar:
     st.markdown('<div class="brand"><span>✦</span>Coding Assistant</div>', unsafe_allow_html=True)
 
-    if st.button("＋  New chat", key="new_chat"):
+    if st.button("+ แชทใหม่", key="new_chat"):
         # ถ้าแชทปัจจุบันยังว่างอยู่ ไม่ต้องสร้างซ้ำ
         if st.session_state.sessions[current_id]["messages"]:
             new_session()
             save_all_sessions(st.session_state.sessions)
         st.rerun()
 
-    st.markdown('<div class="side-label">Chats</div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-label">แชท</div>', unsafe_allow_html=True)
 
     for s_id, s_data in reversed(list(st.session_state.sessions.items())):
-        title = (s_data.get("title") or "Chat")[:24]
+        title = s_data.get("title") or "Chat"  # ชื่อยาวถูกตัดด้วย CSS (ellipsis)
         is_active = s_id == current_id
 
         col_title, col_del = st.columns([5, 1], gap="small")
@@ -328,7 +283,7 @@ with st.sidebar:
                 st.session_state.current_session_id = s_id
                 st.rerun()
         with col_del:
-            if st.button("✕", key=f"del_{s_id}"):
+            if st.button("✕", key=f"del_{s_id}", help="ลบแชทนี้"):
                 del st.session_state.sessions[s_id]
                 if not st.session_state.sessions:
                     new_session()
@@ -337,16 +292,37 @@ with st.sidebar:
                 save_all_sessions(st.session_state.sessions)
                 st.rerun()
 
-    st.markdown('<div class="side-label">&nbsp;</div>', unsafe_allow_html=True)
-    with st.expander("Settings"):
-        st.selectbox("Retrieval mode", RETRIEVAL_MODES, key="retrieval_mode")
-        st.caption(f"LLM: `{LLM_MODEL}`")
-        st.caption(f"Embedding: `{EMBED_MODEL}`")
-        st.caption(f"Vision: `{VISION_MODEL}`")
-        if st.button("Clear all chats", key="clear_all"):
-            st.session_state.sessions = {}
-            new_session()
-            save_all_sessions(st.session_state.sessions)
+    with st.container(key="settings"):
+        st.markdown('<div class="side-label">ตั้งค่า</div>', unsafe_allow_html=True)
+        st.radio(
+            "โหมดค้นหา",
+            RETRIEVAL_MODES,
+            captions=[RETRIEVAL_CAPTIONS[m] for m in RETRIEVAL_MODES],
+            key="retrieval_mode",
+        )
+
+        online = ollama_online()
+        st.markdown(
+            f'<div class="status"><span class="dot {"on" if online else "off"}"></span>'
+            f'{"Ollama เชื่อมต่อแล้ว" if online else "Ollama ไม่ได้เปิด"}</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"โมเดล: `{LLM_MODEL}`  \nEmbedding: `{EMBED_MODEL}`  \nอ่านรูป: `{VISION_MODEL}`")
+
+        if st.session_state.get("confirm_clear"):
+            st.caption("ลบแชททั้งหมดถาวร ยืนยันไหม")
+            col_yes, col_no = st.columns(2, gap="small")
+            if col_yes.button("ลบทั้งหมด", key="clear_yes", type="primary"):
+                st.session_state.sessions = {}
+                new_session()
+                save_all_sessions(st.session_state.sessions)
+                st.session_state.confirm_clear = False
+                st.rerun()
+            if col_no.button("ยกเลิก", key="clear_no"):
+                st.session_state.confirm_clear = False
+                st.rerun()
+        elif st.button("ล้างแชททั้งหมด", key="clear_all"):
+            st.session_state.confirm_clear = True
             st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -381,13 +357,12 @@ if not current_messages and not user_prompt:
     st.markdown(
         f'<div class="hero">'
         f'<div class="hero-title">ถามเรื่องโค้ดได้เลย</div>'
-        f'<div class="hero-sub">ทำงานบนเครื่องของคุณด้วย {LLM_MODEL}<br>แนบไฟล์โค้ด, PDF หรือรูปภาพได้ที่ไอคอนคลิปในช่องพิมพ์</div>'
+        f'<div class="hero-sub">ค้นตัวอย่างจากชุดโค้ดในเครื่อง แนบไฟล์หรือรูป error ได้</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
-    cols = st.columns(2)
     for i, text in enumerate(SUGGESTIONS):
-        cols[i % 2].button(text, key=f"sug_{i}", on_click=set_pending_prompt, args=(text,))
+        st.button(text, key=f"sug_{i}", on_click=set_pending_prompt, args=(text,))
 
 for msg in current_messages:
     render_message(msg)
@@ -450,9 +425,13 @@ if user_prompt:
                 f"ตรวจสอบว่า Ollama เปิดอยู่ และติดตั้งโมเดล `{LLM_MODEL}` กับ `{EMBED_MODEL}` แล้ว"
             )
 
-        render_sources(sources)
+        mode = st.session_state.retrieval_mode
+        render_sources(context, mode)
 
-    current_messages.append({"role": "assistant", "content": response, "sources": sources})
+    current_messages.append({
+        "role": "assistant", "content": response,
+        "sources": sources, "snippets": context, "mode": mode,
+    })
     st.session_state.sessions[current_id]["messages"] = current_messages
     save_all_sessions(st.session_state.sessions)
 
