@@ -1,0 +1,13 @@
+[project]
+name = "local-coding-assistant"
+version = "0.1.0"
+description = "Local RAG Coding Assistant with Hybrid Search and Streamlit UI"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.43",
+    "langchain-community>=0.0.10",
+    "faiss-cpu>=1.7.4",
+    "rank-bm25>=0.2.2",
+    "ollama>=0.1.0",
+    "pypdf>=4.0",
+]

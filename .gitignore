@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# ข้อมูลที่แอปสร้างตอนรัน (ประวัติแชทและไฟล์ที่ผู้ใช้แนบ)
+chat_uploads/
+chat_sessions.json
+chat_history.json
+
+# OS
+.DS_Store
+Thumbs.db
