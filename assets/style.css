@@ -67,6 +67,13 @@
     background: var(--ink); color: var(--text); border-color: transparent;
 }
 
+/* Streamlit 1.64 ตั้งกรอบรอบปุ่มให้กว้างเท่าข้อความ จึงต้องขยายตัวกรอบ (element container) ด้วย */
+.st-key-new_chat, [class*="st-key-chat_"], [class*="st-key-sug_"],
+.st-key-new_chat .stButton, [class*="st-key-chat_"] .stButton, [class*="st-key-sug_"] .stButton,
+.st-key-new_chat .stButton > *, [class*="st-key-chat_"] .stButton > *, [class*="st-key-sug_"] .stButton > * {
+    width: 100% !important; max-width: 100%;
+}
+
 /* ปุ่มแชทใหม่: เต็มความกว้าง */
 .st-key-new_chat button {
     justify-content: center !important;

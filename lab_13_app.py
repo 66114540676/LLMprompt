@@ -353,16 +353,20 @@ if typed:
 elif pending:
     user_prompt = pending
 
+# หน้าแรกอยู่ใน st.empty() ตำแหน่งเดียวกันทุกรอบ พอส่งคำถาม ช่องนี้จะถูกล้างทันที
+# (ไม่อย่างนั้น Streamlit จะโชว์ปุ่มคำถามแนะนำจากรอบก่อนค้างไว้จนกว่าจะตอบเสร็จ)
+welcome = st.empty()
 if not current_messages and not user_prompt:
-    st.markdown(
-        f'<div class="hero">'
-        f'<div class="hero-title">ถามเรื่องโค้ดได้เลย</div>'
-        f'<div class="hero-sub">ค้นตัวอย่างจากชุดโค้ดในเครื่อง แนบไฟล์หรือรูป error ได้</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-    for i, text in enumerate(SUGGESTIONS):
-        st.button(text, key=f"sug_{i}", on_click=set_pending_prompt, args=(text,))
+    with welcome.container():
+        st.markdown(
+            f'<div class="hero">'
+            f'<div class="hero-title">ถามเรื่องโค้ดได้เลย</div>'
+            f'<div class="hero-sub">ค้นตัวอย่างจากชุดโค้ดในเครื่อง แนบไฟล์หรือรูป error ได้</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        for i, text in enumerate(SUGGESTIONS):
+            st.button(text, key=f"sug_{i}", on_click=set_pending_prompt, args=(text,))
 
 for msg in current_messages:
     render_message(msg)
