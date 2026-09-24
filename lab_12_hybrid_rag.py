@@ -10,6 +10,8 @@ EMBED_MODEL = "nomic-embed-text"
 
 # ไฟล์ที่โหลดเข้าฐานความรู้ได้ (.py แยกตามฟังก์ชัน/คลาส ส่วนไฟล์อื่นแยกตามจำนวนบรรทัด)
 SUPPORTED_SUFFIXES = {".py", ".md", ".txt", ".js", ".ts", ".java", ".c", ".cpp", ".sql"}
+# เอกสารประกอบใน dataset/ ที่ไม่ใช่ฐานความรู้ (ถ้าโหลดเข้าไป ผลค้นหาและผลวัดจะเพี้ยน)
+EXCLUDED_FILES = {"README.md", "eval_results.md"}
 CHUNK_MAX_CHARS = 1500
 CHUNK_LINES = 40
 
@@ -91,7 +93,7 @@ def load_chunks(path="dataset"):
     files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file())
     chunks = []
     for f in files:
-        if f.suffix.lower() not in SUPPORTED_SUFFIXES:
+        if f.suffix.lower() not in SUPPORTED_SUFFIXES or f.name in EXCLUDED_FILES:
             continue
         try:
             text = f.read_text(encoding="utf-8")

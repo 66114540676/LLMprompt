@@ -1,0 +1,20 @@
+[
+  {"question": "Explain the binary_search function", "expected": ["binary_search"], "lang": "en", "type": "exact"},
+  {"question": "How does merge_sort work?", "expected": ["merge_sort"], "lang": "en", "type": "exact"},
+  {"question": "validate_email regex pattern", "expected": ["validate_email"], "lang": "en", "type": "exact"},
+  {"question": "Show me the retry decorator", "expected": ["retry"], "lang": "en", "type": "exact"},
+  {"question": "read_csv_rows with a header row", "expected": ["read_csv_rows"], "lang": "en", "type": "exact"},
+
+  {"question": "ฟังก์ชันตรวจว่าตัวเลขเป็นจำนวนเฉพาะหรือไม่", "expected": ["is_prime"], "lang": "th", "type": "concept"},
+  {"question": "หาตัวหารร่วมมากของเลขสองจำนวน", "expected": ["gcd"], "lang": "th", "type": "concept"},
+  {"question": "กลับลำดับตัวอักษรในข้อความจากหลังไปหน้า", "expected": ["reverse_string"], "lang": "th", "type": "concept"},
+  {"question": "โครงสร้างข้อมูลแบบเข้าก่อนออกก่อน", "expected": ["Queue"], "lang": "th", "type": "concept"},
+  {"question": "ป้องกันไม่ให้ถอนเงินเกินยอดคงเหลือในบัญชี", "expected": ["BankAccount", "InsufficientFundsError"], "lang": "th", "type": "concept"},
+
+  {"question": "Example of the observer pattern", "expected": ["EventEmitter"], "lang": "en", "type": "concept"},
+  {"question": "How can I cache a function's results so repeated calls are fast?", "expected": ["memoize"], "lang": "en", "type": "concept"},
+  {"question": "Make sure only one instance of a class is ever created", "expected": ["Config"], "lang": "en", "type": "concept"},
+
+  {"question": "Write a FastAPI endpoint that returns JSON", "expected": [], "lang": "en", "type": "out_of_dataset"},
+  {"question": "How do I train a neural network with PyTorch?", "expected": [], "lang": "en", "type": "out_of_dataset"}
+]
